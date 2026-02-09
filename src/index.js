@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 import { firebaseAdmin, firestore } from "./firebase.js";
 import { encryptPayload, decryptPayload } from "./crypto.js";
 import { syncSunat } from "./sunat/sync.js";
+import { lookupRuc, normalizeRuc, isValidRuc } from "./sunat/ruc.js";
 
 dotenv.config();
 
@@ -56,6 +57,27 @@ app.post("/sunat/credentials", requireAuth, async (req, res) => {
     return res.json({ ok: true });
   } catch (error) {
     return res.status(500).json({ error: "Could not store credentials" });
+  }
+});
+
+app.post("/sunat/ruc", requireAuth, async (req, res) => {
+  const { ruc } = req.body || {};
+  const normalized = normalizeRuc(ruc);
+
+  if (!normalized) {
+    return res.status(400).json({ error: "Missing ruc" });
+  }
+
+  if (!isValidRuc(normalized)) {
+    return res.status(400).json({ error: "RUC inválido" });
+  }
+
+  try {
+    const data = await lookupRuc({ ruc: normalized });
+    return res.json({ ok: true, data });
+  } catch (error) {
+    const status = error.status || 500;
+    return res.status(status).json({ error: error.message || "No se pudo consultar el RUC" });
   }
 });
 

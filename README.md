@@ -11,9 +11,11 @@ Backend serverless para sincronizar comprobantes de SUNAT usando Playwright.
 - `SUNAT_ENCRYPTION_KEY`: clave base64 de 32 bytes para cifrar credenciales.
 - `FIREBASE_SERVICE_ACCOUNT`: JSON del service account (string en una sola linea).
 - `CORS_ORIGIN`: origen permitido (ej: `https://contapp-pe.vercel.app`).
+- `SUNAT_RUC_CACHE_TTL_DAYS`: dias de cache para consultas RUC (default: 7).
 
 ## Endpoints
 - `POST /sunat/credentials`
+- `POST /sunat/ruc`
 - `POST /sunat/sync`
 - `GET /sunat/status?businessId=...`
 
