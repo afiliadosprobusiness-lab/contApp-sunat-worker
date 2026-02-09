@@ -12,6 +12,8 @@ Backend serverless para sincronizar comprobantes de SUNAT usando Playwright.
 - `FIREBASE_SERVICE_ACCOUNT`: JSON del service account (string en una sola linea).
 - `CORS_ORIGIN`: origen permitido (ej: `https://contapp-pe.vercel.app`).
 - `SUNAT_RUC_CACHE_TTL_DAYS`: dias de cache para consultas RUC (default: 7).
+- `SUNAT_PADRON_CACHE_HOURS`: horas de cache para el archivo padron reducido (default: 24).
+- `SUNAT_PADRON_PAGE_URL`: URL oficial del padron reducido (default: SUNAT).
 
 ## Endpoints
 - `POST /sunat/credentials`
@@ -21,6 +23,7 @@ Backend serverless para sincronizar comprobantes de SUNAT usando Playwright.
 
 ## Modo mock (para pruebas)
 - `SUNAT_MOCK=true` crea comprobantes de prueba en Firestore.
+- Para consulta RUC real, usa `SUNAT_MOCK=false` (descarga padron reducido de SUNAT).
 
 ## Deploy (Cloud Run)
 1. Construir imagen: `gcloud builds submit --tag gcr.io/PROJECT_ID/contapp-sunat-worker`
