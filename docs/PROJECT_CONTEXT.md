@@ -28,6 +28,7 @@ Worker dedicado para SUNAT: guarda credenciales SOL (usuario secundario) de form
 - `POST /sunat/ruc`
 - `POST /sunat/sync`
 - `GET /sunat/status?businessId=...`
+- `POST /sunat/cpe/emit`
 
 ## Convenciones de código
 - ESM (`type: module`).
@@ -40,4 +41,20 @@ Worker dedicado para SUNAT: guarda credenciales SOL (usuario secundario) de form
 - `CORS_ORIGIN`
 - `SUNAT_MOCK`
 - Cache/URLs/timeouts (ver `README.md`)
+- `CPE_PROVIDER`
+- `CPE_HTTP_URL`, `CPE_HTTP_TOKEN`, `CPE_HTTP_API_KEY`
+- `CPE_HTTP_TIMEOUT_MS`
+- `SUNAT_CPE_ENV`
+- `SUNAT_SOAP_TIMEOUT_MS`
 
+## Actualizacion 2026-02-15 (fase CPE)
+
+### Emision CPE por provider
+- Se agrega modulo `src/sunat/cpe.js` con estrategia por provider:
+  - `MOCK` (default): respuesta aceptada simulada.
+  - `HTTP`: envia payload normalizado a proveedor externo (`CPE_HTTP_URL`).
+  - `SUNAT`: emision directa via SOAP billService (requiere SOL + certificado digital).
+- El endpoint `POST /sunat/cpe/emit`:
+  - carga negocio + factura desde Firestore (`invoices`)
+  - emite CPE con `emitCpe`
+  - persiste resultado en la factura (`cpeStatus`, ticket/cdr, errores, timestamps)

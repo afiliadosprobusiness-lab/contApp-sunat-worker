@@ -1,10 +1,12 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
+import crypto from "crypto";
 import { firebaseAdmin, firestore } from "./firebase.js";
 import { encryptPayload, decryptPayload } from "./crypto.js";
 import { syncSunat } from "./sunat/sync.js";
 import { lookupRuc, normalizeRuc, isValidRuc } from "./sunat/ruc.js";
+import { emitCpe } from "./sunat/cpe.js";
 
 dotenv.config();
 
@@ -14,7 +16,29 @@ const port = process.env.PORT || 8080;
 app.use(cors({
   origin: process.env.CORS_ORIGIN || true,
 }));
-app.use(express.json({ limit: "1mb" }));
+// Certificates (PFX/P12) are uploaded as base64, so we need a bit more headroom.
+app.use(express.json({ limit: "4mb" }));
+
+const MAX_CERT_BYTES = 256 * 1024; // keep well under Firestore 1MiB doc limit after encryption/metadata
+
+const stripDataUrlPrefix = (value) => {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  const marker = "base64,";
+  const idx = raw.indexOf(marker);
+  return idx >= 0 ? raw.slice(idx + marker.length) : raw;
+};
+
+const isBase64Like = (value) => {
+  const raw = String(value || "").trim();
+  if (!raw) return false;
+  if (raw.length % 4 !== 0) return false;
+  return /^[A-Za-z0-9+/]+={0,2}$/.test(raw);
+};
+
+const sha256Base64 = (buffer) => {
+  return crypto.createHash("sha256").update(buffer).digest("base64");
+};
 
 const requireAuth = async (req, res, next) => {
   const header = req.headers.authorization || "";
@@ -58,6 +82,84 @@ app.post("/sunat/credentials", requireAuth, async (req, res) => {
   } catch (error) {
     return res.status(500).json({ error: "Could not store credentials" });
   }
+});
+
+app.post("/sunat/certificate", requireAuth, async (req, res) => {
+  const businessId = String(req.body?.businessId || "").trim();
+  const filename = String(req.body?.filename || "").trim();
+  const password = String(req.body?.pfxPassword || "").trim();
+  const base64 = stripDataUrlPrefix(req.body?.pfxBase64);
+
+  if (!businessId || !base64 || !password) {
+    return res.status(400).json({ error: "Missing fields" });
+  }
+  if (!isBase64Like(base64)) {
+    return res.status(400).json({ error: "Invalid certificate encoding" });
+  }
+
+  const bytes = Buffer.from(base64, "base64");
+  if (!bytes.length) {
+    return res.status(400).json({ error: "Invalid certificate file" });
+  }
+  if (bytes.length > MAX_CERT_BYTES) {
+    return res.status(413).json({ error: "Certificate too large" });
+  }
+
+  const uid = req.user.uid;
+  const businessRef = firestore.collection("users").doc(uid).collection("businesses").doc(businessId);
+  const businessSnap = await businessRef.get();
+  if (!businessSnap.exists) {
+    return res.status(404).json({ error: "Business not found" });
+  }
+
+  try {
+    const encrypted = encryptPayload({
+      pfxBase64: base64,
+      pfxPassword: password,
+    });
+
+    const ref = firestore.collection("users").doc(uid).collection("sunat_certificates").doc(businessId);
+    await ref.set(
+      {
+        encrypted,
+        filename: filename || null,
+        sizeBytes: bytes.length,
+        sha256: sha256Base64(bytes),
+        updatedAt: firebaseAdmin.firestore.FieldValue.serverTimestamp(),
+        createdAt: firebaseAdmin.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    );
+
+    return res.json({ ok: true });
+  } catch (error) {
+    return res.status(500).json({ error: "Could not store certificate" });
+  }
+});
+
+app.get("/sunat/certificate/status", requireAuth, async (req, res) => {
+  const businessId = String(req.query?.businessId || "").trim();
+  if (!businessId) {
+    return res.status(400).json({ error: "Missing businessId" });
+  }
+
+  const uid = req.user.uid;
+  const ref = firestore.collection("users").doc(uid).collection("sunat_certificates").doc(businessId);
+  const snap = await ref.get();
+  if (!snap.exists) {
+    return res.json({ ok: true, configured: false });
+  }
+
+  const data = snap.data() || {};
+  return res.json({
+    ok: true,
+    configured: Boolean(data.encrypted),
+    filename: data.filename || null,
+    sizeBytes: data.sizeBytes || null,
+    sha256: data.sha256 || null,
+    updatedAt: data.updatedAt || null,
+    createdAt: data.createdAt || null,
+  });
 });
 
 app.post("/sunat/ruc", requireAuth, async (req, res) => {
@@ -153,6 +255,87 @@ app.get("/sunat/status", requireAuth, async (req, res) => {
   }
 
   return res.json({ status: snap.data() });
+});
+
+app.post("/sunat/cpe/emit", requireAuth, async (req, res) => {
+  const businessId = String(req.body?.businessId || "").trim();
+  const invoiceId = String(req.body?.invoiceId || "").trim();
+
+  if (!businessId || !invoiceId) {
+    return res.status(400).json({ error: "Missing fields" });
+  }
+
+  const uid = req.user.uid;
+  const businessRef = firestore.collection("users").doc(uid).collection("businesses").doc(businessId);
+  const invoiceRef = businessRef.collection("invoices").doc(invoiceId);
+
+  try {
+    const credRef = firestore.collection("users").doc(uid).collection("sunat_credentials").doc(businessId);
+    const certRef = firestore.collection("users").doc(uid).collection("sunat_certificates").doc(businessId);
+
+    const [businessSnap, invoiceSnap, credSnap, certSnap] = await Promise.all([
+      businessRef.get(),
+      invoiceRef.get(),
+      credRef.get(),
+      certRef.get(),
+    ]);
+
+    if (!businessSnap.exists) {
+      return res.status(404).json({ error: "Business not found" });
+    }
+    if (!invoiceSnap.exists) {
+      return res.status(404).json({ error: "Invoice not found" });
+    }
+    if (!credSnap.exists) {
+      return res.status(400).json({ error: "Missing credentials" });
+    }
+    if (!certSnap.exists) {
+      return res.status(400).json({ error: "Missing certificate" });
+    }
+
+    const sol = decryptPayload(credSnap.data()?.encrypted);
+    const cert = decryptPayload(certSnap.data()?.encrypted);
+
+    const result = await emitCpe({
+      uid,
+      businessId,
+      invoiceId,
+      business: businessSnap.data(),
+      invoice: invoiceSnap.data(),
+      sol,
+      cert,
+    });
+
+    await invoiceRef.set({
+      cpeStatus: result.status || "RECHAZADO",
+      cpeProvider: result.provider || null,
+      cpeTicket: result.ticket || null,
+      cpeCode: result.cdr?.code ?? null,
+      cpeDescription: result.cdr?.description ?? null,
+      cpeZipBase64: result.cdr?.zipBase64 ?? null,
+      cpeRaw: result.raw ?? null,
+      cpeError: null,
+      cpeLastAttemptAt: firebaseAdmin.firestore.FieldValue.serverTimestamp(),
+      cpeAcceptedAt:
+        result.status === "ACEPTADO"
+          ? firebaseAdmin.firestore.FieldValue.serverTimestamp()
+          : firebaseAdmin.firestore.FieldValue.delete(),
+      updatedAt: firebaseAdmin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+
+    return res.status(200).json({ ok: true, result });
+  } catch (error) {
+    await invoiceRef.set({
+      cpeStatus: "ERROR",
+      cpeError: error?.message || "CPE emit failed",
+      cpeLastAttemptAt: firebaseAdmin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: firebaseAdmin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true }).catch(() => undefined);
+
+    const status = Number(error?.status) || 500;
+    const message = status >= 500 ? "CPE emit failed" : error?.message || "CPE emit failed";
+    return res.status(status).json({ error: message });
+  }
 });
 
 app.listen(port, () => {

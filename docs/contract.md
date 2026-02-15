@@ -195,6 +195,22 @@ Respuestas:
 - `400`: `{ error: "Missing businessId" }`
 - `401`: auth error
 
+### `POST /sunat/cpe/emit` (Bearer Firebase requerido)
+
+Body requerido:
+
+- `businessId`
+- `invoiceId`
+
+Respuestas:
+
+- `200`: `{ ok: true, result }`
+- `400`: `{ error: "Missing fields" }` o validaciones de payload CPE
+- `400`: `{ error: "Missing credentials" | "Missing certificate" }` si no estan configurados
+- `401`: auth error
+- `404`: `{ error: "Business not found" | "Invoice not found" }`
+- `500`: `{ error: "CPE emit failed" }`
+
 ## Endpoints serverless en frontend (`contApp-peru/api/*`)
 
 Codigo observado:
@@ -236,7 +252,14 @@ Comportamientos actuales que el frontend y dashboard consumen:
   - guardado cifrado en `sunat_credentials`
   - estado en `sunat_sync`
   - escritura de comprobantes en `users/{uid}/businesses/{businessId}/comprobantes`
+  - escritura de resultado CPE en `users/{uid}/businesses/{businessId}/invoices/{invoiceId}` con campos `cpe*`
 - `GET /sunat/status` mantiene contrato dual actual:
   - `status: "IDLE"` (string) o
   - `status: { ... }` (objeto)
 - Firestore realtime del frontend depende de los nombres actuales de campos en `users`, `businesses`, `comprobantes` y `sunat_sync`.
+
+## Changelog del Contrato
+- Fecha: 2026-02-15
+- Cambio: Se agrega endpoint `POST /sunat/cpe/emit` con persistencia de estado CPE en `invoices`.
+- Tipo: non-breaking
+- Impacto: habilita emision/reintento CPE sin romper endpoints SUNAT existentes.

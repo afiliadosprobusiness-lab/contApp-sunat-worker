@@ -18,12 +18,20 @@ Backend serverless para sincronizar comprobantes de SUNAT usando Playwright.
 - `SUNAT_VENTAS_URL`: URL directa al reporte de ventas (opcional, recomendado).
 - `SUNAT_COMPRAS_URL`: URL directa al reporte de compras (opcional, recomendado).
 - `SUNAT_SYNC_TIMEOUT_MS`: timeout para pasos de automatizacion (default: 60000).
+- `CPE_PROVIDER`: `MOCK` (default) o `HTTP`.
+- `CPE_HTTP_URL`: endpoint del proveedor CPE (requerido si `CPE_PROVIDER=HTTP`).
+- `CPE_HTTP_TOKEN`: bearer token opcional para proveedor CPE HTTP.
+- `CPE_HTTP_API_KEY`: API key opcional para proveedor CPE HTTP.
+- `CPE_HTTP_TIMEOUT_MS`: timeout de emision CPE HTTP (default: 45000).
+- `SUNAT_CPE_ENV`: `BETA` (default) o `PROD` para emision directa a SUNAT (SOAP billService).
+- `SUNAT_SOAP_TIMEOUT_MS`: timeout para requests SOAP a SUNAT (default: 45000).
 
 ## Endpoints
 - `POST /sunat/credentials`
 - `POST /sunat/ruc`
 - `POST /sunat/sync`
 - `GET /sunat/status?businessId=...`
+- `POST /sunat/cpe/emit`
 
 ## Modo mock (para pruebas)
 - `SUNAT_MOCK=true` crea comprobantes de prueba en Firestore.
