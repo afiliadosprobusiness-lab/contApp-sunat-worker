@@ -28,6 +28,8 @@ Backend serverless para sincronizar comprobantes de SUNAT usando Playwright.
 
 ## Endpoints
 - `POST /sunat/credentials`
+- `POST /sunat/certificate`
+- `GET /sunat/certificate/status?businessId=...`
 - `POST /sunat/ruc`
 - `POST /sunat/sync`
 - `GET /sunat/status?businessId=...`

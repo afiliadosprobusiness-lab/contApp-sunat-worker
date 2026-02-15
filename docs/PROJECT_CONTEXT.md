@@ -25,6 +25,8 @@ Worker dedicado para SUNAT: guarda credenciales SOL (usuario secundario) de form
 
 ## Endpoints (alto nivel)
 - `POST /sunat/credentials`
+- `POST /sunat/certificate`
+- `GET /sunat/certificate/status?businessId=...`
 - `POST /sunat/ruc`
 - `POST /sunat/sync`
 - `GET /sunat/status?businessId=...`
@@ -57,4 +59,4 @@ Worker dedicado para SUNAT: guarda credenciales SOL (usuario secundario) de form
 - El endpoint `POST /sunat/cpe/emit`:
   - carga negocio + factura desde Firestore (`invoices`)
   - emite CPE con `emitCpe`
-  - persiste resultado en la factura (`cpeStatus`, ticket/cdr, errores, timestamps)
+  - persiste resultado en la factura (`cpeBeta*` o `cpe*` segun `env`, ticket/cdr, errores, timestamps)

@@ -155,6 +155,31 @@ Respuestas:
 - `401`: `{ error: "Missing auth token" | "Invalid token" }`
 - `500`: `{ error: "Could not store credentials" }`
 
+### `POST /sunat/certificate` (Bearer Firebase requerido)
+
+Body requerido:
+- `businessId`
+- `pfxBase64` (base64 del archivo `.pfx/.p12`; se acepta Data URL y se normaliza)
+- `pfxPassword`
+
+Body opcional:
+- `filename`
+
+Respuestas:
+- `200`: `{ ok: true }`
+- `400`: `{ error: "Missing fields" | "Invalid certificate encoding" | "Invalid certificate file" }`
+- `401`: auth error
+- `404`: `{ error: "Business not found" }`
+- `413`: `{ error: "Certificate too large" }`
+- `500`: `{ error: "Could not store certificate" }`
+
+### `GET /sunat/certificate/status?businessId=...` (Bearer Firebase requerido)
+
+Respuestas:
+- `200`: `{ ok: true, configured: boolean, filename?, sizeBytes?, sha256?, updatedAt?, createdAt? }`
+- `400`: `{ error: "Missing businessId" }`
+- `401`: auth error
+
 ### `POST /sunat/ruc` (Bearer Firebase requerido)
 
 Body:
@@ -202,11 +227,15 @@ Body requerido:
 - `businessId`
 - `invoiceId`
 
+Body opcional:
+- `env` (`BETA|PROD`) (default `BETA`)
+
 Respuestas:
 
 - `200`: `{ ok: true, result }`
 - `400`: `{ error: "Missing fields" }` o validaciones de payload CPE
 - `400`: `{ error: "Missing credentials" | "Missing certificate" }` si no estan configurados
+- `400`: `{ error: "Invalid env" }`
 - `401`: auth error
 - `404`: `{ error: "Business not found" | "Invoice not found" }`
 - `500`: `{ error: "CPE emit failed" }`
@@ -250,9 +279,10 @@ Comportamientos actuales que el frontend y dashboard consumen:
 - `POST /paypal/webhook` mantiene updates sobre `users/{uid}` (`plan`, `status`, `pendingPlan`, ids PayPal)
 - Endpoints SUNAT deben conservar:
   - guardado cifrado en `sunat_credentials`
+  - guardado cifrado de certificado en `sunat_certificates`
   - estado en `sunat_sync`
   - escritura de comprobantes en `users/{uid}/businesses/{businessId}/comprobantes`
-  - escritura de resultado CPE en `users/{uid}/businesses/{businessId}/invoices/{invoiceId}` con campos `cpe*`
+  - escritura de resultado CPE en `users/{uid}/businesses/{businessId}/invoices/{invoiceId}` con campos `cpe*` y `cpeBeta*`
 - `GET /sunat/status` mantiene contrato dual actual:
   - `status: "IDLE"` (string) o
   - `status: { ... }` (objeto)
