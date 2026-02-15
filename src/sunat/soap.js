@@ -2,8 +2,8 @@ import { DOMParser } from "@xmldom/xmldom";
 
 const SOAP_TIMEOUT_MS = Number(process.env.SUNAT_SOAP_TIMEOUT_MS || 45000);
 
-const getBillServiceUrl = () => {
-  const env = String(process.env.SUNAT_CPE_ENV || "BETA").trim().toUpperCase();
+const getBillServiceUrl = (requestedEnv) => {
+  const env = String(requestedEnv || process.env.SUNAT_CPE_ENV || "BETA").trim().toUpperCase();
   if (env === "PROD") {
     return "https://e-factura.sunat.gob.pe/ol-ti-itcpfegem/billService";
   }
@@ -27,7 +27,7 @@ const extractText = (doc, tagLocalName) => {
   return "";
 };
 
-export const sendBillSoap = async ({ ruc, solUser, solPassword, zipFilename, zipBase64 }) => {
+export const sendBillSoap = async ({ ruc, solUser, solPassword, zipFilename, zipBase64, env }) => {
   const username = `${String(ruc || "").trim()}${String(solUser || "").trim()}`;
   if (!username || !solPassword) {
     const error = new Error("Missing SOL credentials");
@@ -53,7 +53,7 @@ export const sendBillSoap = async ({ ruc, solUser, solPassword, zipFilename, zip
   </soapenv:Body>
 </soapenv:Envelope>`;
 
-  const response = await fetch(getBillServiceUrl(), {
+  const response = await fetch(getBillServiceUrl(env), {
     method: "POST",
     headers: {
       "Content-Type": "text/xml; charset=utf-8",
@@ -85,4 +85,3 @@ export const sendBillSoap = async ({ ruc, solUser, solPassword, zipFilename, zip
 
   return { cdrZipBase64: appResp, rawXml: text };
 };
-

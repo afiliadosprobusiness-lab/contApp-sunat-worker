@@ -191,7 +191,7 @@ const decodeCdr = async (cdrZipBase64) => {
   }
 };
 
-const emitViaSunat = async (payload, { sol, cert }) => {
+const emitViaSunat = async (payload, { sol, cert, env }) => {
   const { buildUblInvoiceXml } = await import("./xml.js");
   const { parsePfxToPem } = await import("./certificate.js");
   const { signUblXml } = await import("./sign.js");
@@ -245,6 +245,7 @@ const emitViaSunat = async (payload, { sol, cert }) => {
     solPassword: sol.solPassword,
     zipFilename,
     zipBase64,
+    env,
   });
 
   const cdrMeta = await decodeCdr(cdrZipBase64);
@@ -255,11 +256,11 @@ const emitViaSunat = async (payload, { sol, cert }) => {
     provider: "SUNAT",
     ticket: null,
     cdr: { code: cdrMeta.code, description: cdrMeta.description, zipBase64: cdrZipBase64 },
-    raw: { soap: rawXml },
+    raw: { soap: rawXml, env: env || null },
   };
 };
 
-export const emitCpe = async ({ uid, businessId, invoiceId, business, invoice, sol, cert }) => {
+export const emitCpe = async ({ uid, businessId, invoiceId, business, invoice, sol, cert, sunatEnv }) => {
   const payload = ensureInvoicePayload({ business, invoice: { ...invoice, id: invoiceId } });
   const requestPayload = {
     uid,
@@ -271,7 +272,7 @@ export const emitCpe = async ({ uid, businessId, invoiceId, business, invoice, s
     return emitViaHttp(requestPayload);
   }
   if (CPE_PROVIDER === "SUNAT") {
-    return emitViaSunat(requestPayload, { sol, cert });
+    return emitViaSunat(requestPayload, { sol, cert, env: sunatEnv });
   }
   return emitViaMock(requestPayload);
 };

@@ -260,9 +260,14 @@ app.get("/sunat/status", requireAuth, async (req, res) => {
 app.post("/sunat/cpe/emit", requireAuth, async (req, res) => {
   const businessId = String(req.body?.businessId || "").trim();
   const invoiceId = String(req.body?.invoiceId || "").trim();
+  const requestedEnv = String(req.body?.env || "BETA").trim().toUpperCase();
 
   if (!businessId || !invoiceId) {
     return res.status(400).json({ error: "Missing fields" });
+  }
+
+  if (requestedEnv !== "BETA" && requestedEnv !== "PROD") {
+    return res.status(400).json({ error: "Invalid env" });
   }
 
   const uid = req.user.uid;
@@ -304,31 +309,38 @@ app.post("/sunat/cpe/emit", requireAuth, async (req, res) => {
       invoice: invoiceSnap.data(),
       sol,
       cert,
+      sunatEnv: requestedEnv,
     });
 
-    await invoiceRef.set({
-      cpeStatus: result.status || "RECHAZADO",
-      cpeProvider: result.provider || null,
-      cpeTicket: result.ticket || null,
-      cpeCode: result.cdr?.code ?? null,
-      cpeDescription: result.cdr?.description ?? null,
-      cpeZipBase64: result.cdr?.zipBase64 ?? null,
-      cpeRaw: result.raw ?? null,
-      cpeError: null,
-      cpeLastAttemptAt: firebaseAdmin.firestore.FieldValue.serverTimestamp(),
-      cpeAcceptedAt:
+    const prefix = requestedEnv === "PROD" ? "cpe" : "cpeBeta";
+    const updatePayload = {
+      [`${prefix}Status`]: result.status || "RECHAZADO",
+      [`${prefix}Provider`]: result.provider || null,
+      [`${prefix}Ticket`]: result.ticket || null,
+      [`${prefix}Code`]: result.cdr?.code ?? null,
+      [`${prefix}Description`]: result.cdr?.description ?? null,
+      [`${prefix}ZipBase64`]: result.cdr?.zipBase64 ?? null,
+      [`${prefix}Raw`]: result.raw ?? null,
+      [`${prefix}Error`]: null,
+      [`${prefix}LastAttemptAt`]: firebaseAdmin.firestore.FieldValue.serverTimestamp(),
+      [`${prefix}AcceptedAt`]:
         result.status === "ACEPTADO"
           ? firebaseAdmin.firestore.FieldValue.serverTimestamp()
           : firebaseAdmin.firestore.FieldValue.delete(),
       updatedAt: firebaseAdmin.firestore.FieldValue.serverTimestamp(),
+    };
+
+    await invoiceRef.set({
+      ...updatePayload,
     }, { merge: true });
 
     return res.status(200).json({ ok: true, result });
   } catch (error) {
+    const prefix = requestedEnv === "PROD" ? "cpe" : "cpeBeta";
     await invoiceRef.set({
-      cpeStatus: "ERROR",
-      cpeError: error?.message || "CPE emit failed",
-      cpeLastAttemptAt: firebaseAdmin.firestore.FieldValue.serverTimestamp(),
+      [`${prefix}Status`]: "ERROR",
+      [`${prefix}Error`]: error?.message || "CPE emit failed",
+      [`${prefix}LastAttemptAt`]: firebaseAdmin.firestore.FieldValue.serverTimestamp(),
       updatedAt: firebaseAdmin.firestore.FieldValue.serverTimestamp(),
     }, { merge: true }).catch(() => undefined);
 
